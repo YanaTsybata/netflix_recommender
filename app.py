@@ -5,14 +5,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 def load_data():
+    # Loads the Netflix dataset from a CSV file and returns a pandas DataFrame
     file_path = 'data/netflix.csv'
     try:
         df = pd.read_csv(file_path, sep=',', encoding='latin1')
 
         print("Size of dataset:", df.shape)
-        print("\nColomn info:")
+        print("\nColumn info:")
         print(df.info())
-        print("\nfirst 5 :")
+        print("\nFirst 5 rows:")
         print(df.head())
 
         return df
@@ -21,6 +22,7 @@ def load_data():
         return None
 
 def preprocess_data(df):
+    # Preprocesses the input DataFrame by removing duplicates and handling missing values
     if df is None:
         return None
     df_unique = df.drop_duplicates()
@@ -35,10 +37,10 @@ def preprocess_data(df):
 def create_feature_matrix(df):
     if df is None:
         return None
-    # Объединим все текстовые признаки в один
+    # Combine all text features into one
     df['features'] = df['type'] + ' ' + df['listed_in'] + ' ' + df['description']
 
-    # Создание TF-IDF матрицы
+    # Create TF-IDF matrix
     tfidf = TfidfVectorizer(stop_words='english')
     tfidf_matrix = tfidf.fit_transform(df['features'])
 
@@ -46,45 +48,39 @@ def create_feature_matrix(df):
     return tfidf_matrix
 
 def calculate_similarity(feature_matrix):
+    # Calculates the cosine similarity matrix for the given feature matrix
     try:
         similarity_matrix = cosine_similarity(feature_matrix)
-        print("similarity: ", similarity_matrix.shape)
+        print("Similarity matrix shape:", similarity_matrix.shape)
         return similarity_matrix
     except Exception as e:
         print(f"Error calculating similarity: {e}")
         return None
 
-def get_recomendation(title, df, similarity_matrix):
-
-    """Args:
-    title (str): Название фильма для поиска рекомендаций.
-    df (pandas.DataFrame): DataFrame с информацией о фильмах.
-    similarity_matrix (numpy.ndarray): Матрица сходства фильмов.
-
-    Returns:
-    list: Список рекомендованных фильмов или сообщение об ошибке.
-    """
+def get_recommendation(title, df, similarity_matrix):
+    # Finds and returns a list of recommended movies based on the given movie title
     try:
-        movie_indices =  df[df['title'] == title].index
+        movie_indices = df[df['title'] == title].index
         if len(movie_indices) == 0:
-            return "Movie not found"
+            return ["Movie not found"]
+
         movie_index = movie_indices[0]
 
         similarity_scores = list(enumerate(similarity_matrix[movie_index]))
-        similarity_scores = sorted(similarity_scores, key = lambda x:[1], reverse=True)
+        similarity_scores = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
         similarity_scores = similarity_scores[1:11]
 
-        recomendations = []
-        for i in similarity_scores:
-            movie_title= df.iloc[i]['title']
-            movie_type=df.iloc[i]['type']
-            recomendations.append(f"{movie_title} ({movie_type})")
-            return recomendations
+        recommendations = []
+        for i, score in similarity_scores:
+            movie_title = df.iloc[i]['title']
+            movie_type = df.iloc[i]['type']
+            recommendations.append(f"{movie_title} ({movie_type})")
+
+        return recommendations
     except Exception as e:
-        return f"Error in recomendatioans: {str(e)} "
+        return [f"Error in recommendations: {str(e)}"]
 
-
-# Вызов функции для проверки
+# Call the function to check
 df = load_data()
 df_processed = preprocess_data(df)
 
@@ -93,7 +89,7 @@ if df_processed is not None:
     if feature_matrix is not None:
         print("Feature matrix created successfully")
 
-        # Вызов функции calculate_similarity
+        # Call the calculate_similarity function
         similarity_matrix = calculate_similarity(feature_matrix)
         if similarity_matrix is not None:
             print("Similarity matrix created successfully")
@@ -103,3 +99,22 @@ if df_processed is not None:
         print("Failed to create feature matrix")
 else:
     print("Preprocessing failed, cannot create feature matrix")
+
+def get_recommendations_interface(title):
+    # A function for the interface that calls get_recommendation() and returns a list of recommendations
+    try:
+        recommendations = get_recommendation(title, df, similarity_matrix)
+        return "\n".join(recommendations)
+    except Exception as e:
+        return f"Error in receiving recommendations: {str(e)}"
+
+# Define the Interface
+app = gr.Interface(
+    fn=get_recommendations_interface,
+    inputs=gr.Textbox(label="Type your film/show here ..."),
+    outputs=gr.Textbox(label="Recommendation"),
+    title="AI Netflix Recommender",
+    description="Ask for Netflix recommendations"
+)
+
+app.launch()
